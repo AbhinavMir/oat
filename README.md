@@ -2,6 +2,8 @@
 
 Local, encrypted one-time passwords in your terminal.
 
+![oat demo](demo.gif)
+
 `oat` stores your TOTP secrets in a single file sealed with XChaCha20-Poly1305.
 The encryption key lives in your OS keychain and is recoverable with a master
 password. Nothing leaves the machine. If anything other than `oat` changes the
