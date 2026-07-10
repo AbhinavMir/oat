@@ -98,7 +98,7 @@ func Open(askNew, askUnlock func() (string, error)) (*Vault, error) {
 
 	v := &Vault{dir: dir, salt: f.Salt, wrapped: f.WrappedKey, argon: f.Argon}
 
-	if dk, ok := keyringGet(); ok {
+	if dk, ok := keyringGet(dir); ok {
 		if content, err := unseal(dk, f.Content); err == nil {
 			v.dk = dk
 			v.load(content)
@@ -124,7 +124,7 @@ func Open(askNew, askUnlock func() (string, error)) (*Vault, error) {
 	}
 	v.dk = dk
 	v.load(content)
-	keyringSet(dk)
+	keyringSet(dir, dk)
 	v.Access = checkAccess(dir, dk, raw)
 	return v, nil
 }
@@ -154,7 +154,7 @@ func create(dir string, askNew func() (string, error)) (*Vault, error) {
 	if err := v.save(); err != nil {
 		return nil, err
 	}
-	keyringSet(dk)
+	keyringSet(dir, dk)
 	return v, nil
 }
 
