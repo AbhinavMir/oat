@@ -45,9 +45,8 @@ type model struct {
 	now   time.Time
 	width int
 
-	addDomain, addUser, addSecret string
-	toast                         string
-	toastUntil                    time.Time
+	toast      string
+	toastUntil time.Time
 }
 
 // New builds the interactive model over an already-unlocked vault.
@@ -78,18 +77,6 @@ func (m model) Init() tea.Cmd { return tick() }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.list.SetSize(msg.Width, listHeight(msg.Height))
-		if m.mode == modeAdd && m.form != nil {
-			f, cmd := m.form.Update(msg)
-			if form, ok := f.(*huh.Form); ok {
-				m.form = form
-			}
-			return m, cmd
-		}
-		return m, nil
-
 	case tickMsg:
 		m.now = time.Time(msg)
 		if !m.toastUntil.IsZero() && m.now.After(m.toastUntil) {
@@ -97,25 +84,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tick()
 
-	case tea.KeyMsg:
-		switch m.mode {
-		case modeAdd:
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.list.SetSize(msg.Width, listHeight(msg.Height))
+		if m.mode == modeAdd {
 			return m.updateAdd(msg)
-		case modeConfirm:
-			return m.updateConfirm(msg)
-		default:
-			return m.updateList(msg)
 		}
+		return m, nil
 	}
 
-	if m.mode == modeAdd && m.form != nil {
-		f, cmd := m.form.Update(msg)
-		if form, ok := f.(*huh.Form); ok {
-			m.form = form
-		}
+	// While adding, every message belongs to the form so its command
+	// cascade (field navigation, submit) is threaded and observed.
+	if m.mode == modeAdd {
+		return m.updateAdd(msg)
+	}
+
+	km, ok := msg.(tea.KeyMsg)
+	if !ok {
+		var cmd tea.Cmd
+		m.list, cmd = m.list.Update(msg)
 		return m, cmd
 	}
-	return m, nil
+	if m.mode == modeConfirm {
+		return m.updateConfirm(km)
+	}
+	return m.updateList(km)
 }
 
 func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -160,7 +153,11 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) updateAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if k, ok := msg.(tea.KeyMsg); ok && k.Type == tea.KeyEsc {
+		m.mode = modeList
+		return m, nil
+	}
 	f, cmd := m.form.Update(msg)
 	if form, ok := f.(*huh.Form); ok {
 		m.form = form
@@ -178,22 +175,21 @@ func (m model) updateAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) startAdd() {
-	m.addDomain, m.addUser, m.addSecret = "", "", ""
-	m.form = addForm(&m.addDomain, &m.addUser, &m.addSecret)
+	m.form = addForm()
 	m.mode = modeAdd
 }
 
 func (m *model) commitAdd() {
-	p, issuer, account, err := totp.Parse(m.addSecret)
+	p, issuer, account, err := totp.Parse(m.form.GetString("secret"))
 	if err != nil {
 		m.flash("invalid secret")
 		return
 	}
-	domain := strings.TrimSpace(m.addDomain)
+	domain := strings.TrimSpace(m.form.GetString("domain"))
 	if domain == "" {
 		domain = issuer
 	}
-	user := strings.TrimSpace(m.addUser)
+	user := strings.TrimSpace(m.form.GetString("user"))
 	if user == "" {
 		user = account
 	}
@@ -243,7 +239,11 @@ func (m *model) flash(s string) {
 
 func (m model) View() string {
 	if m.mode == modeAdd && m.form != nil {
-		return "\n" + header(m.v) + "\n\n" + m.form.View()
+		hint := footerStyle.Render(
+			descStyle.Render("tab/") + keyStyle.Render("shift+tab") + descStyle.Render(" move  ") +
+				keyStyle.Render("enter") + descStyle.Render(" save  ") +
+				keyStyle.Render("esc") + descStyle.Render(" cancel"))
+		return "\n" + header(m.v) + "\n\n" + m.form.View() + "\n" + hint
 	}
 
 	var b strings.Builder

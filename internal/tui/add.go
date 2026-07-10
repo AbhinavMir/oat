@@ -7,21 +7,21 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-func addForm(domain, user, secret *string) *huh.Form {
+func addForm() *huh.Form {
 	f := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
+				Key("domain").
 				Title("Domain").
-				Placeholder("google.com").
-				Value(domain),
+				Placeholder("google.com"),
 			huh.NewInput().
+				Key("user").
 				Title("Username").
-				Placeholder("you@google.com").
-				Value(user),
+				Placeholder("you@google.com"),
 			huh.NewInput().
+				Key("secret").
 				Title("Secret or otpauth:// URI").
 				Placeholder("JBSWY3DPEHPK3PXP").
-				Value(secret).
 				Validate(validSecret),
 		),
 	).WithTheme(huh.ThemeCharm()).WithShowHelp(true)
